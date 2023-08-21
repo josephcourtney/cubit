@@ -60,7 +60,7 @@ candela = Unit(
     symbol="cd",
 )
 radian = Unit(
-    physical_dimension=PhysicalDimension.ANGLE,
+    physical_dimension=PhysicalDimension.NONDIMENSIONAL,
     name="radian",
     symbol="rad",
 )

@@ -1,6 +1,31 @@
 import inspect
 from fractions import Fraction
-from typing import ClassVar, Union
+from typing import ClassVar, final, TypeVar
+
+
+class SingletonMeta(type):
+    """SingletonMeta.
+    Metaclass that makes the class a singleton
+
+    Exmaple Use
+    -----------
+    class A(metaclass=Singleton):
+        def __init__(self):
+            pass
+
+    a_0 = A()
+    a_1 = A()
+    assert a_0 == a_1
+
+    """
+
+    _instance: ClassVar = None
+
+    def __call__(cls):
+        if cls._instance is None:
+            cls._instance = super().__call__()
+        return cls._instance
+
 
 class MultitonMeta(type):
     """MultitonMeta.
@@ -45,4 +70,13 @@ class MultitonMeta(type):
         return cls._instances[index]
 
 
-NumberLike = Union[int, float, complex, Fraction]
+NumberLike = int | float | complex | Fraction
+
+
+T = TypeVar("T")
+Sentinel = type[T]
+@final
+class Default:
+    pass
+
+

@@ -1,8 +1,11 @@
+from collections.abc import Iterable
+from copy import copy
 from enum import Enum
 from fractions import Fraction
-from typing import Iterable, Optional, Self, Union, overload
+from typing import NotRequired, Optional, Self, TypedDict, Union, overload
+from typing_extensions import Unpack
 
-from ._base import MultitonMeta, NumberLike
+from ._base import Default, MultitonMeta, NumberLike, Sentinel
 
 UNIT_REGISTRY: dict[
     str,
@@ -20,7 +23,6 @@ PhysicalDimension = Enum(
         "TEMPERATURE",
         "AMOUNT_OF_SUBSTANCE",
         "LUMINOUS_INTENSITY",
-        "ANGLE",
     ],
 )
 
@@ -35,6 +37,9 @@ class ScalingFactor(metaclass=MultitonMeta, key=("factor",)):
         self.name: str = name
         self.symbol: str = symbol
         self.factor: NumberLike = factor
+
+    def __copy__(self):
+        return type(self)(self.name, self.symbol, self.factor)
 
     def __repr__(self):
         return f"<{self.name}({self.symbol}) = {self.factor:1.0e}>"
@@ -89,13 +94,17 @@ class ScalingFactor(metaclass=MultitonMeta, key=("factor",)):
     def __rtruediv__(self, other: NumberLike) -> "Quantity":
         match other:
             case int() | float() | complex() | Fraction():
-                return Quantity(other, CompositeUnit((unum / self,),(1,)))
+                return Quantity(other, CompositeUnit((unum / self,), (1,)))
             case _:
                 return NotImplemented
 
 
 uni: ScalingFactor = ScalingFactor("", "", 1e0)
 
+
+class QuantityData(TypedDict):
+    value: NotRequired[NumberLike]
+    unit: NotRequired[Optional["CompositeUnit"]]
 
 class Quantity:
     def __init__(
@@ -128,13 +137,20 @@ class Quantity:
 
     def but(
         self,
-        value: NumberLike|None=None,
-        unit: Optional["CompositeUnit"] = None,
+        **kwargs: Unpack[QuantityData],
     ) -> Self:
         return type(self)(
-            value=self.value if value is None else value,
-            unit=self.unit if unit is None else unit,
+            **(
+                QuantityData(
+                    {
+                        "value": self.value,
+                        "unit": self.unit,
+                    },
+                )
+                | kwargs
+            ),
         )
+
 
     def __hash__(self):
         return hash((self.unit, self.value))
@@ -248,6 +264,14 @@ class Quantity:
                 return NotImplemented
 
 
+class CompositeUnitData(TypedDict):
+    component_units: NotRequired[Iterable["Unit"]]
+    component_powers: NotRequired[Iterable[NumberLike]]
+    name: NotRequired[str | None]
+    symbol: NotRequired[str | None]
+    factor: NotRequired[NumberLike]
+
+
 class CompositeUnit:
     def __init__(
         self,
@@ -258,7 +282,7 @@ class CompositeUnit:
         factor: NumberLike = 1,
     ):
         _unit_dict: dict[Unit, NumberLike] = {}
-        for u, p in zip(component_units, component_powers):
+        for u, p in zip(component_units, component_powers, strict=True):
             factor *= u.scaling_factor.factor**p
             base_u = u.but(scaling_factor=uni)
             _unit_dict[base_u] = _unit_dict.get(base_u, 0) + p
@@ -284,25 +308,36 @@ class CompositeUnit:
             factor=q.value,
         ).but(**kwargs)
 
+    def __copy__(self):
+        return type(self)(
+            self.component_units,
+            self.component_powers,
+            self.name,
+            self.symbol,
+            self.factor,
+        )
+
     def but(
         self,
-        component_units: Iterable["Unit"] | None = None,
-        component_powers: Iterable[NumberLike] | None = None,
-        name: str | None = None,
-        symbol: str | None = None,
-        factor: NumberLike | None = None,
+        **kwargs: Unpack[CompositeUnitData],
     ) -> Self:
         return type(self)(
-            component_units=self.component_units if component_units is None else component_units,
-            component_powers=self.component_powers if component_powers is None else component_powers,
-            name=self.name if name is None else name,
-            symbol=self.symbol if symbol is None else symbol,
-            factor=self.factor if factor is None else factor,
+            **(
+                CompositeUnitData(
+                    {
+                        "component_units": self.component_units,
+                        "component_powers": self.component_powers,
+                        "name": self.name,
+                        "symbol": self.symbol,
+                        "factor": self.factor,
+                    }
+                )
+                | kwargs
+            ),
         )
 
     def decompose(self):
-        u = self.but(name=None, symbol=None, factor=1)
-        return self.factor * u if self.factor is not None else u
+        return self.but(name=None, symbol=None)
 
     @overload
     def __mul__(self, other: Self) -> Self:
@@ -439,7 +474,7 @@ class CompositeUnit:
         if self.symbol is None:
             return " ".join(
                 f"{unit}" if power == 1 else f"{unit}^{power}"
-                for unit, power in zip(self.component_units, self.component_powers)
+                for unit, power in zip(self.component_units, self.component_powers, strict=True)
             )
         return self.symbol
 
@@ -452,16 +487,22 @@ class CompositeUnit:
     def __eq__(self, other: object) -> bool:
         match other:
             case CompositeUnit():
-                up_self = dict(zip(self.component_units, self.component_powers))
-                up_other = dict(zip(other.component_units, other.component_powers))
+                up_self = dict(zip(self.component_units, self.component_powers, strict=True))
+                up_other = dict(zip(other.component_units, other.component_powers, strict=True))
                 return (self.factor, up_self) == (other.factor, up_other)
             case Unit():
-                up_self = dict(zip(self.component_units, self.component_powers))
-                up_other = dict(zip((other,), (1,)))
+                up_self = dict(zip(self.component_units, self.component_powers, strict=True))
+                up_other = dict(zip((other,), (1,), strict=True))
                 return (self.factor, up_self) == (other.scaling_factor.factor, up_other)
             case _:
                 return False
 
+class UnitData(TypedDict):
+    physical_dimension: NotRequired[PhysicalDimension]
+    name: NotRequired[str]
+    symbol: NotRequired[str]
+    referent: NotRequired[str | None]
+    scaling_factor: NotRequired[ScalingFactor]
 
 class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent")):
     def __init__(
@@ -478,7 +519,6 @@ class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent"))
         self.referent = referent
         self.scaling_factor = scaling_factor
         UNIT_REGISTRY[str(self)] = self
-
 
     @classmethod
     def get(cls, key):
@@ -559,19 +599,23 @@ class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent"))
 
     def but(
         self,
-        physical_dimension: PhysicalDimension | None = None,
-        name: str | None = None,
-        symbol: str | None = None,
-        referent: str | None = None,
-        scaling_factor: ScalingFactor | None = None,
+        **kwargs: Unpack[UnitData],
     ) -> Self:
         return type(self)(
-            physical_dimension=self.physical_dimension if physical_dimension is None else physical_dimension,
-            name=self.name if name is None else name,
-            symbol=self.symbol if symbol is None else symbol,
-            referent=self.referent if referent is None else referent,
-            scaling_factor=self.scaling_factor if scaling_factor is None else scaling_factor,
+            **(
+                UnitData(
+                    {
+                        "physical_dimension": self.physical_dimension,
+                        "name": self.name,
+                        "symbol": self.symbol,
+                        "referent": self.referent,
+                        "scaling_factor": self.scaling_factor,
+                    },
+                )
+                | kwargs
+            ),
         )
+
 
     def decompose(self):
         return self
@@ -588,7 +632,6 @@ class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent"))
     def __truediv__(self, other: CompositeUnit) -> CompositeUnit:
         ...
 
-
     @overload
     def __truediv__(self, other: Quantity) -> Quantity:
         ...
@@ -596,7 +639,6 @@ class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent"))
     @overload
     def __truediv__(self, other: ScalingFactor) -> Self:
         ...
-
 
     def __truediv__(self, other):
         match other:
@@ -618,7 +660,7 @@ class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent"))
                 )
             case Quantity():
                 return Quantity(
-                    1/other.value,
+                    1 / other.value,
                     self / other.unit,
                 )
             case ScalingFactor():
@@ -647,7 +689,6 @@ class Unit(metaclass=MultitonMeta, key=("symbol", "scaling_factor", "referent"))
     @overload
     def __rtruediv__(self, other: Quantity) -> Quantity:
         ...
-
 
     def __rtruediv__(self, other):
         match other:
