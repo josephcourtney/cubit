@@ -1,3 +1,3 @@
 # cubit
-experimental unit system
+A package implementing an experimental unit system
 
