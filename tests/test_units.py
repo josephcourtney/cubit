@@ -2,8 +2,8 @@ import itertools
 
 import pytest
 
-from connvert import units
-from connvert.units import CompositeUnit, Quantity, ScalingFactor, Unit
+from cubit import units
+from cubit.system import CompositeUnit, Quantity, ScalingFactor, Unit
 
 example_types = [
     2,
@@ -66,6 +66,6 @@ def test_mul(a, b):
 def test_div(a, b):
     c = a / b
     if isinstance(a, int) and isinstance(b, (int, float)):
-        assert type(c) == float
+        assert isinstance(c, float)
     else:
-        assert type(c) == type_combinations_div.get((type(a), type(b)), int)
+        assert isinstance(c, type_combinations_div.get((type(a), type(b)), int))

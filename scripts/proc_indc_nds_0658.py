@@ -22,47 +22,40 @@ def convert_spin(r):
         r = r[:-1]
     elif r[-1] == "-":
         r = r[-1] + r[:-1]
-    m = re.fullmatch(r"-?(\d+)/(\d+)", r)
-    if m:
-        return -int(m.group(1)) / int(m.group(2))
-    m = re.fullmatch(r"(\d+)/(\d+)", r)
-    if m:
-        return int(m.group(1)) / int(m.group(2))
-    m = re.fullmatch(r"-?(\d+)", r)
-    if m:
-        return int(r)
-    return repr(r)
+    if m := re.fullmatch(r"-?(\d+)/(\d+)", r):
+        return -int(m[1]) / int(m[2])
+    if m := re.fullmatch(r"(\d+)/(\d+)", r):
+        return int(m[1]) / int(m[2])
+    return int(r) if (m := re.fullmatch(r"-?(\d+)", r)) else repr(r)
 
 
 def convert_half_life(r):
-    multiplier = {
-        "fs": 1e-15,
-        "ps": 1e-12,
-        "ns": 1e-9,
-        "us": 1e-6,
-        "ms": 1e-3,
-        "s": 1,
-        "m": 60,
-        "min": 60,
-        "h": 60 * 60,
-        "d": 24 * 60 * 60,
-        "y": 365.25 * 24 * 60 * 60,
-    }
     if r == "stable":
         return np.inf
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s?(\w+)", r)
-    if m:
-        unit = m.group(2)
-        return multiplier[unit] * float(m.group(1))
+    if m := re.fullmatch(r"(\d+(?:\.\d+)?)\s?(\w+)", r):
+        unit = m[2]
+        multiplier = {
+            "fs": 1e-15,
+            "ps": 1e-12,
+            "ns": 1e-9,
+            "us": 1e-6,
+            "ms": 1e-3,
+            "s": 1,
+            "m": 60,
+            "min": 60,
+            "h": 60 * 60,
+            "d": 24 * 60 * 60,
+            "y": 365.25 * 24 * 60 * 60,
+        }
+        return multiplier[unit] * float(m[1])
     return r
 
 
 def remove_error(r):
     if isinstance(r, Number):
         return float(r)
-    m = re.fullmatch(r"\+?(-?\d+(?:\.\d+)?)(?:\(.*\))?", r)
-    if m:
-        return float(m.group(1))
+    if m := re.fullmatch(r"\+?(-?\d+(?:\.\d+)?)(?:\(.*\))?", r):
+        return float(m[1])
     return r
 
 
@@ -113,9 +106,7 @@ moment_data["electric_quadrupole_moment"] = (
 moment_data["electric_quadrupole_moment"] = (
     moment_data["electric_quadrupole_moment"].str.removesuffix("st").str.strip()
 )
-moment_data["electric_quadrupole_moment"] = moment_data[
-    "electric_quadrupole_moment"
-].apply(remove_error)
+moment_data["electric_quadrupole_moment"] = moment_data["electric_quadrupole_moment"].apply(remove_error)
 
 moment_data["magnetic_dipole_moment"] = pd.to_numeric(
     moment_data["magnetic_dipole_moment"],
@@ -144,15 +135,17 @@ moment_data = moment_data[
     ]
 ]
 
-moment_data.columns = [
-    "symbol",
-    "Z",
-    "A",
-    "energy_level_keV",
-    "half_life_s",
-    "spin",
-    "magnetic_dipole_moment_J_T",
-    "electric_quadrupole_moment_Cm2",
-]
+moment_data.columns = pd.Index(
+    [
+        "symbol",
+        "Z",
+        "A",
+        "energy_level_keV",
+        "half_life_s",
+        "spin",
+        "magnetic_dipole_moment_J_T",
+        "electric_quadrupole_moment_Cm2",
+    ],
+)
 path_out = Path(__file__).parent.parent / "data" / "nuclear_moments.csv"
 moment_data.to_csv(path_out.resolve())

@@ -1,6 +1,6 @@
 # import pytest
 #
-# from connvert import physical_data, units
+# from cubit import physical_data, units
 #
 # def test_import():
 #    physical_data.import_isotope_data()

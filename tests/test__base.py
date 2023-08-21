@@ -1,7 +1,7 @@
 import pytest
-from pytest_check import check
+from pytest_check import check  # type: ignore[import]
 
-from connvert._base import MultitonMeta
+from cubit._base import MultitonMeta
 
 
 def test_MultitonMeta_multitonicity():

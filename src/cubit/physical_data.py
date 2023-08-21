@@ -59,7 +59,7 @@ _isotope_gyromagnetic_ratio = None
 _element_atomic_number = None
 _element_name = None
 _monoisotopic_mass = None
-_isotope_natural_abundance = None
+_isotope_natural_abundance: dict[tuple[str,int],float]
 
 
 def import_moment_data():
@@ -194,44 +194,6 @@ class Isotope:
         return repr(self)
 
 
-ELEMENTS = {}
-ISOTOPES = {}
-_manual_pref_order = [
-    ("H", 1),
-    ("N", 15),
-    ("C", 13),
-    ("P", 31),
-    ("F", 19),
-]
-_pref_order = []
-
-gyromagnetic_ratio_ratios = {}
-
-
-def nmr_active_isotopes(element: Element | str):
-    """nmr_active_isotopes.
-        return a list of Isotopes of a given element that are NMR active.
-
-    Parameters
-    ----------
-    element : Element|str
-        element for which to retrieve NMR-active isotopes
-
-    """
-    if isinstance(element, str):
-        element = ELEMENTS[element]
-    elif isinstance(element, Element):
-        pass
-    else:
-        msg = (
-            "element must be a string containing the element's atomic symbol or an Element object",
-        )
-        raise TypeError(msg)
-    return [
-        iso
-        for (symbol, A), iso in ISOTOPES.items()
-        if ELEMENTS[symbol] == element and iso.spin != 0
-    ]
 
 
 (
@@ -250,11 +212,14 @@ def nmr_active_isotopes(element: Element | str):
 import_moment_data()
 import_isotope_data()
 
-ELEMENTS = {
+
+
+
+ELEMENTS: dict[str,Element] = {
     symbol: Element(symbol, _element_name[symbol], z)
     for symbol, z in _element_atomic_number.items()
 }
-ISOTOPES = {
+ISOTOPES: dict[tuple[str,int],Isotope] = {
     (symbol, A): Isotope(
         element=ELEMENTS[symbol],
         mass_number=A,
@@ -268,6 +233,39 @@ ISOTOPES = {
     for (symbol, A), m in _monoisotopic_mass.items()
 }
 
+gyromagnetic_ratio_ratios = {}
+
+
+def nmr_active_isotopes(element: Element | str):
+    """nmr_active_isotopes.
+        return a list of Isotopes of a given element that are NMR active.
+
+    Parameters
+    ----------
+    element : Element|str
+        element for which to retrieve NMR-active isotopes
+
+    """
+    if isinstance(element, str):
+        element = ELEMENTS[element]
+    elif not isinstance(element, Element):
+        msg = (
+            "element must be a string containing the element's atomic symbol or an Element object",
+        )
+        raise TypeError(msg)
+    return [
+        iso
+        for (symbol, A), iso in ISOTOPES.items()
+        if ELEMENTS[symbol] == element and iso.spin != 0
+    ]
+
+_manual_pref_order = [
+    ("H", 1),
+    ("N", 15),
+    ("C", 13),
+    ("P", 31),
+    ("F", 19),
+]
 _pref_order = _manual_pref_order + sorted(
     [iso for iso in _isotope_natural_abundance if iso not in _manual_pref_order],
     key=lambda iso: -_isotope_natural_abundance.get(iso, 0.0),
@@ -277,15 +275,15 @@ for isotuple_0, isotuple_1 in itertools.combinations(
     _isotope_nuclear_g_factor.keys(),
     2,
 ):
-    if not (
-        isotuple_0 in _isotope_nuclear_g_factor
-        and isotuple_1 in _isotope_nuclear_g_factor
+    if (
+        isotuple_0 not in _isotope_nuclear_g_factor
+        or isotuple_1 not in _isotope_nuclear_g_factor
     ):
         continue
-    i_0 = ISOTOPES[isotuple_0]
     i_1 = ISOTOPES[isotuple_1]
     ng_0 = _isotope_nuclear_g_factor[isotuple_0]
     ng_1 = _isotope_nuclear_g_factor[isotuple_1]
+    i_0 = ISOTOPES[isotuple_0]
     if abs(ng_0.value) > EPS and abs(ng_1.value) > EPS:
         gyromagnetic_ratio_ratios[(i_0, i_1)] = ng_0 / ng_1
         gyromagnetic_ratio_ratios[(i_1, i_0)] = ng_1 / ng_0

@@ -1,3 +1,3 @@
-# connvert
-file conversion component of connjur 2
+# cubit
+experimental unit system
 
